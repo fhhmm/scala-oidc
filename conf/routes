@@ -1,0 +1,3 @@
+GET   /login                 controllers.LoginController.login
+GET   /authorize             controllers.AuthorizationController.authorize
+GET   /                      controllers.HomeController.index
