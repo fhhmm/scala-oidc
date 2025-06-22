@@ -1,3 +1,6 @@
-GET   /login                 controllers.LoginController.login
-GET   /authorize             controllers.AuthorizationController.authorize
-GET   /                      controllers.HomeController.index
+GET   /login                        controllers.LoginController.login
+GET   /authorize                    controllers.AuthorizationController.authorize
+POST  /token                        controllers.AuthorizationController.token
+GET   /                             controllers.HomeController.index
+
+GET   /dummyAuthorizationServer     controllers.DummyAuthorizationServerController.index

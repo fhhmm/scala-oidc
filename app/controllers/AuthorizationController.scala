@@ -8,7 +8,7 @@ class AuthorizationController @Inject()(cc: ControllerComponents) extends Abstra
   def authorize: Action[AnyContent] = Action { (request: Request[AnyContent]) =>
     val query = request.queryString.map { case (k,v) => k -> v.mkString }
     val clientId = query.getOrElse("client_id", "unknown")
-    val redirectUri = query.getOrElse("redirect_uri", "")
+    val redirectUri = query.getOrElse("redirect_uri", "http://localhost:9000/dummyAuthorizationServer")
     val state = query.getOrElse("state", "")
     val code = "sample-code-1234"
 
