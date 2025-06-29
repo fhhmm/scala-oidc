@@ -8,4 +8,9 @@ class HomeController @Inject()(cc: ControllerComponents) extends AbstractControl
   def index = Action {
     Ok("OIDC サンプルへようこそ")
   }
+
+  def error: Action[AnyContent] = Action { (request: Request[AnyContent]) =>
+    val message = request.queryString.getOrElse("message", "")
+    Ok(s"エラーが発生しました: $message")
+  }
 }

@@ -9,13 +9,16 @@ import com.auth0.jwt.algorithms.Algorithm
 import com.auth0.jwt.interfaces.DecodedJWT
 import com.auth0.jwt.JWTVerifier
 import play.api.libs.json.Json
+import java.util.UUID
 
 @Singleton
 class LoginController @Inject()(cc: ControllerComponents, ws: WSClient)(implicit ec: ExecutionContext) extends AbstractController(cc) {
-  private val redirectUri = "/callback"
+  private val redirectUri = "localhost:9000/callback"
   private val clientId = "client123"
 
   def login: Action[AnyContent] = Action { (request: Request[AnyContent]) =>
+    val state = UUID.randomUUID().toString
+
     val html =
       s"""
          |<html>
@@ -23,11 +26,11 @@ class LoginController @Inject()(cc: ControllerComponents, ws: WSClient)(implicit
          |<body>
          |  <h1>OIDCログイン</h1>
          |  <form method="get" action="/dummyAuth/authorize">
-         |    <input type="hidden" name="client_id" value="client123"/>
-         |    <input type="hidden" name="redirect_uri" value="/callback"/>
+         |    <input type="hidden" name="client_id" value="$clientId"/>
+         |    <input type="hidden" name="redirect_uri" value="$redirectUri"/>
          |    <input type="hidden" name="response_type" value="code"/>
          |    <input type="hidden" name="scope" value="openid"/>
-         |    <input type="hidden" name="state" value="xyz"/>
+         |    <input type="hidden" name="state" value="$state"/>
          |    <input type="hidden" name="code_challenge" value="abc123"/>
          |    <input type="hidden" name="code_challenge_method" value="S256"/>
          |    <button type="submit">OIDCでログイン</button>
@@ -36,7 +39,7 @@ class LoginController @Inject()(cc: ControllerComponents, ws: WSClient)(implicit
          |</html>
          |""".stripMargin
 
-    Ok(html).as(HTML)
+    Ok(html).as(HTML).withSession(request.session + ("state" -> state))
   }
 
   def callback: Action[AnyContent] = Action.async { (request: Request[AnyContent]) =>
@@ -53,27 +56,33 @@ class LoginController @Inject()(cc: ControllerComponents, ws: WSClient)(implicit
         (code, state)
     }
 
-    val tokenRequest = ws.url("http://localhost:9000/dummyAuth/token")
-      .post(Map(
-        "grant_type" -> Seq("authorization_code"),
-        "code" -> Seq(code),
-        "redirect_uri" -> Seq(redirectUri),
-        "client_id" -> Seq(clientId),
-        "code_verifier" -> Seq("dummy")
-      ))
+    val sessionState = request.session.get("state").getOrElse("")
 
-    tokenRequest.map { wsResponse =>
-      val tokenResponseBody = wsResponse.body
-      val responseJson = Json.parse(tokenResponseBody)
-      val maybeIdToken = (responseJson \ "id_token").asOpt[String]
+    if (state != sessionState) {
+      Future.successful(Redirect("/error?message=stateMismatch"))
+    } else {
+      val tokenRequest = ws.url("http://localhost:9000/dummyAuth/token")
+        .post(Map(
+          "grant_type" -> Seq("authorization_code"),
+          "code" -> Seq(code),
+          "redirect_uri" -> Seq(redirectUri),
+          "client_id" -> Seq(clientId),
+          "code_verifier" -> Seq("dummy")
+        ))
 
-      maybeIdToken match {
-        case Some(idToken) =>
-          Redirect("/mypage").withSession(
-            "id_token" -> idToken
-          )
-        case None =>
-          Redirect("/login")
+      tokenRequest.map { wsResponse =>
+        val tokenResponseBody = wsResponse.body
+        val responseJson = Json.parse(tokenResponseBody)
+        val maybeIdToken = (responseJson \ "id_token").asOpt[String]
+
+        maybeIdToken match {
+          case Some(idToken) =>
+            Redirect("/mypage").withSession(
+              "id_token" -> idToken
+            )
+          case None =>
+            Redirect("/login")
+        }
       }
     }
   }
