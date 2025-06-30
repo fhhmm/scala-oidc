@@ -12,6 +12,6 @@ libraryDependencies ++= Seq(
   guice,
   ws,
   "com.auth0" % "java-jwt" % "4.4.0",
-  "com.typesafe.play" %% "play-json" % "2.10.0-RC5"
+  "com.typesafe.play" %% "play-json" % "2.10.0-RC5",
   "com.auth0" % "java-jwt" % "4.4.0"
 )
