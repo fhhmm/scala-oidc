@@ -31,37 +31,36 @@ class DummyAuthController @Inject()(cc: ControllerComponents) extends AbstractCo
     val codeChallengeMethod = query.getOrElse("code_challenge_method", "")
     val state = query.getOrElse("state", "")
 
-    // TODO: dummyAuth/errorにリダイレクト
-    if (responseType != "code")
-      BadRequest("Invalid response_type")
+    if (responseType != "code") {
+      Redirect("/dummyAuth/error?message=invalidResponseType")
+    } else if (codeChallengeMethod != "S256") {
+      Redirect("/dummyAuth/error?message=onlyS256Supported")
+    } else {
+      val code = generateAuthorizationCode()
+      codeStore.put(code, CodeRecord(clientId, redirectUri, codeChallenge, codeChallengeMethod, state))
 
-    if (codeChallengeMethod != "S256")
-      BadRequest("Only S256 supported")
-    
-    val code = generateAuthorizationCode()
-    codeStore.put(code, CodeRecord(clientId, redirectUri, codeChallenge, codeChallengeMethod, state))
+      val html =
+        s"""
+          |<html>
+          |<head><title>dummy authorization</title></head>
+          |<body>
+          |  <h1>【認可サーバー】権限付与(認可サーバーログイン)</h1>
+          |  <p>client_id: $clientId</p>
+          |  <p>redirect_uri: $redirectUri</p>
+          |  <p>state: $state</p>
+          |  <p>code: $code</p>
+          |  <form method="get" action="/callback">
+          |    <input type="hidden" name="redirect_uri" value="$redirectUri"/>
+          |    <input type="hidden" name="state" value="$state"/>
+          |    <input type="hidden" name="code" value="$code"/>
+          |    <button type="submit">クライアントに権限を付与</button>
+          |  </form>
+          |</body>
+          |</html>
+          |""".stripMargin
 
-    val html =
-      s"""
-         |<html>
-         |<head><title>dummy authorization</title></head>
-         |<body>
-         |  <h1>【認可サーバー】権限付与(認可サーバーログイン)</h1>
-         |  <p>client_id: $clientId</p>
-         |  <p>redirect_uri: $redirectUri</p>
-         |  <p>state: $state</p>
-         |  <p>code: $code</p>
-         |  <form method="get" action="/callback">
-         |    <input type="hidden" name="redirect_uri" value="$redirectUri"/>
-         |    <input type="hidden" name="state" value="$state"/>
-         |    <input type="hidden" name="code" value="$code"/>
-         |    <button type="submit">クライアントに権限を付与</button>
-         |  </form>
-         |</body>
-         |</html>
-         |""".stripMargin
-
-    Ok(html).as(HTML)
+      Ok(html).as(HTML)
+    }
   }
 
   def token: Action[AnyContent] = Action { (request: Request[AnyContent]) =>
@@ -112,6 +111,11 @@ class DummyAuthController @Inject()(cc: ControllerComponents) extends AbstractCo
       "expires_in" -> expiresInSec.toString,
       "id_token" -> idToken
     ))
+  }
+
+  def error: Action[AnyContent] = Action { (request: Request[AnyContent]) =>
+    val message = request.queryString.getOrElse("message", "")
+    Ok(s"エラーが発生しました: $message")
   }
 
   private def generateAuthorizationCode(lengthBytes: Int = 32): String = {

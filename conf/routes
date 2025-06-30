@@ -6,3 +6,4 @@ GET   /mypage                     controllers.LoginController.mypage
 
 GET   /dummyAuth/authorize        controllers.DummyAuthController.authorize
 POST  /dummyAuth/token            controllers.DummyAuthController.token
+GET   /dummyAuth/error            controllers.DummyAuthController.error
