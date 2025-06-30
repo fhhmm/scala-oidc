@@ -6,15 +6,40 @@ import play.api.libs.json.Json
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import java.util.Date
+import scala.collection.concurrent.TrieMap
+import java.security.SecureRandom
+import java.util.Base64
+
 
 @Singleton
 class DummyAuthController @Inject()(cc: ControllerComponents) extends AbstractController(cc) {
+  private val codeStore = TrieMap.empty[String, CodeRecord]
+  case class CodeRecord(
+    clientId: String,
+    redirectUri: String,
+    codeChallenge: String,
+    codeChallengeMethod: String,
+    state: String
+  )
+
   def authorize: Action[AnyContent] = Action { (request: Request[AnyContent]) =>
     val query = request.queryString.map { case (k,v) => k -> v.mkString }
     val clientId = query.getOrElse("client_id", "unknown")
     val redirectUri = query.getOrElse("redirect_uri", "")
+    val responseType = query.getOrElse("response_type", "")
+    val codeChallenge = query.getOrElse("code_challenge", "")
+    val codeChallengeMethod = query.getOrElse("code_challenge_method", "")
     val state = query.getOrElse("state", "")
-    val code = "sample-code-1234"
+
+    // TODO: dummyAuth/errorにリダイレクト
+    if (responseType != "code")
+      BadRequest("Invalid response_type")
+
+    if (codeChallengeMethod != "S256")
+      BadRequest("Only S256 supported")
+    
+    val code = generateAuthorizationCode()
+    codeStore.put(code, CodeRecord(clientId, redirectUri, codeChallenge, codeChallengeMethod, state))
 
     val html =
       s"""
@@ -26,7 +51,7 @@ class DummyAuthController @Inject()(cc: ControllerComponents) extends AbstractCo
          |  <p>redirect_uri: $redirectUri</p>
          |  <p>state: $state</p>
          |  <p>code: $code</p>
-         |  <form method="post" action="/callback">
+         |  <form method="get" action="/callback">
          |    <input type="hidden" name="redirect_uri" value="$redirectUri"/>
          |    <input type="hidden" name="state" value="$state"/>
          |    <input type="hidden" name="code" value="$code"/>
@@ -87,5 +112,11 @@ class DummyAuthController @Inject()(cc: ControllerComponents) extends AbstractCo
       "expires_in" -> expiresInSec.toString,
       "id_token" -> idToken
     ))
+  }
+
+  private def generateAuthorizationCode(lengthBytes: Int = 32): String = {
+    val bytes = new Array[Byte](lengthBytes)
+    SecureRandom.getInstanceStrong().nextBytes(bytes)
+    Base64.getUrlEncoder.withoutPadding().encodeToString(bytes)
   }
 }
