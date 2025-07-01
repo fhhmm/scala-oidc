@@ -64,13 +64,14 @@ class LoginController @Inject()(cc: ControllerComponents, ws: WSClient)(implicit
     if (state != sessionState) {
       Future.successful(Redirect("/error?message=stateMismatch"))
     } else {
+      val (codeVerifier, _) = codeStore.get(sessionState).getOrElse(("", ""))
       val tokenRequest = ws.url("http://localhost:9000/dummyAuth/token")
         .post(Map(
-          "grant_type" -> Seq("authorization_code"),
-          "code" -> Seq(code),
-          "redirect_uri" -> Seq(redirectUri),
-          "client_id" -> Seq(clientId),
-          "code_verifier" -> Seq("dummy")
+          "grant_type" -> "authorization_code",
+          "code" -> code,
+          "redirect_uri" -> redirectUri,
+          "client_id" -> clientId,
+          "code_verifier" -> codeVerifier
         ))
 
       tokenRequest.map { wsResponse =>

@@ -10,7 +10,19 @@ class HomeController @Inject()(cc: ControllerComponents) extends AbstractControl
   }
 
   def error: Action[AnyContent] = Action { (request: Request[AnyContent]) =>
-    val message = request.queryString.getOrElse("message", "")
-    Ok(s"エラーが発生しました: $message")
+    val messages: Seq[String] = request.queryString.get("message").getOrElse(Seq.empty)
+    val html =
+      s"""
+         |<html>
+         |<head><title>エラー</title></head>
+         |<body>
+         |  <h1>エラーが発生しました</h1>
+         |  <ul>
+         |    ${messages.map(m => s"<li>${play.twirl.api.HtmlFormat.escape(m)}</li>").mkString("\n    ")}
+         |  </ul>
+         |</body>
+         |</html>
+         |""".stripMargin
+    Ok(html).as("text/html; charset=UTF-8")
   }
 }
