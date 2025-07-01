@@ -1,0 +1,3 @@
+GET   /authorize                  controllers.AuthController.authorize
+POST  /token                      controllers.AuthController.token
+GET   /error                      controllers.AuthController.error

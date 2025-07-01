@@ -12,7 +12,7 @@ import java.util.Base64
 
 
 @Singleton
-class DummyAuthController @Inject()(cc: ControllerComponents) extends AbstractController(cc) {
+class AuthController @Inject()(cc: ControllerComponents) extends AbstractController(cc) {
   private val codeStore = TrieMap.empty[String, CodeRecord]
   case class CodeRecord(
     clientId: String,
@@ -32,9 +32,9 @@ class DummyAuthController @Inject()(cc: ControllerComponents) extends AbstractCo
     val state = query.getOrElse("state", "")
 
     if (responseType != "code") {
-      Redirect("/dummyAuth/error?message=invalidResponseType")
+      Redirect("/error?message=invalidResponseType")
     } else if (codeChallengeMethod != "S256") {
-      Redirect("/dummyAuth/error?message=onlyS256Supported")
+      Redirect("/error?message=onlyS256Supported")
     } else {
       val code = generateAuthorizationCode()
       codeStore.put(code, CodeRecord(clientId, redirectUri, codeChallenge, codeChallengeMethod, state))
@@ -49,7 +49,7 @@ class DummyAuthController @Inject()(cc: ControllerComponents) extends AbstractCo
           |  <p>redirect_uri: $redirectUri</p>
           |  <p>state: $state</p>
           |  <p>code: $code</p>
-          |  <form method="get" action="/callback">
+          |  <form method="get" action="$redirectUri">
           |    <input type="hidden" name="redirect_uri" value="$redirectUri"/>
           |    <input type="hidden" name="state" value="$state"/>
           |    <input type="hidden" name="code" value="$code"/>

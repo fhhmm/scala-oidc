@@ -1,9 +1,0 @@
-GET   /                           controllers.HomeController.index
-GET   /error                      controllers.HomeController.error
-GET   /login                      controllers.LoginController.login
-GET   /callback                   controllers.LoginController.callback
-GET   /mypage                     controllers.LoginController.mypage
-
-GET   /dummyAuth/authorize        controllers.DummyAuthController.authorize
-POST  /dummyAuth/token            controllers.DummyAuthController.token
-GET   /dummyAuth/error            controllers.DummyAuthController.error
