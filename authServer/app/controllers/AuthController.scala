@@ -1,5 +1,6 @@
 package controllers
 
+import models.{AuthorizeRequest, CodeRecord}
 import javax.inject._
 import play.api.mvc._
 import play.api.libs.json.Json
@@ -14,30 +15,25 @@ import java.util.Base64
 @Singleton
 class AuthController @Inject()(cc: ControllerComponents) extends AbstractController(cc) {
   private val codeStore = TrieMap.empty[String, CodeRecord]
-  case class CodeRecord(
-    clientId: String,
-    redirectUri: String,
-    codeChallenge: String,
-    codeChallengeMethod: String,
-    state: String
-  )
 
-  def authorize: Action[AnyContent] = Action { (request: Request[AnyContent]) =>
-    val query = request.queryString.map { case (k,v) => k -> v.mkString }
-    val clientId = query.getOrElse("client_id", "unknown")
-    val redirectUri = query.getOrElse("redirect_uri", "")
-    val responseType = query.getOrElse("response_type", "")
-    val codeChallenge = query.getOrElse("code_challenge", "")
-    val codeChallengeMethod = query.getOrElse("code_challenge_method", "")
-    val state = query.getOrElse("state", "")
-
-    if (responseType != "code") {
-      Redirect("/error?message=invalidResponseType")
-    } else if (codeChallengeMethod != "S256") {
-      Redirect("/error?message=onlyS256Supported")
-    } else {
+  def authorize: Action[AnyContent] = Action { (req: Request[AnyContent]) =>
+    // TODO: リファクタ
+    val result = for {
+      request <- AuthorizeRequest.parse(req.queryString) match {
+        case Left(message) => Left(Redirect(s"/error/$message"))
+        case Right(v) => Right(v)
+      }
+      _ <- Either.cond(request.responseType == "code", (), Redirect("/error/message=invalidResponseType"))
+      _ <- Either.cond(request.codeChallengeMethod == "S256", (), Redirect("/error/message=onlyS256Supported"))
+    } yield {
       val code = generateAuthorizationCode()
-      codeStore.put(code, CodeRecord(clientId, redirectUri, codeChallenge, codeChallengeMethod, state))
+      codeStore.put(code, CodeRecord(
+        request.clientId,
+        request.redirectUri,
+        request.codeChallenge,
+        request.codeChallengeMethod,
+        request.state
+      ))
 
       val html =
         s"""
@@ -45,13 +41,13 @@ class AuthController @Inject()(cc: ControllerComponents) extends AbstractControl
           |<head><title>dummy authorization</title></head>
           |<body>
           |  <h1>【認可サーバー】権限付与(認可サーバーログイン)</h1>
-          |  <p>client_id: $clientId</p>
-          |  <p>redirect_uri: $redirectUri</p>
-          |  <p>state: $state</p>
+          |  <p>client_id: ${request.clientId}</p>
+          |  <p>redirect_uri: ${request.redirectUri}</p>
+          |  <p>state: ${request.state}</p>
           |  <p>code: $code</p>
-          |  <form method="get" action="$redirectUri">
-          |    <input type="hidden" name="redirect_uri" value="$redirectUri"/>
-          |    <input type="hidden" name="state" value="$state"/>
+          |  <form method="get" action="${request.redirectUri}">
+          |    <input type="hidden" name="redirect_uri" value="${request.redirectUri}"/>
+          |    <input type="hidden" name="state" value="${request.state}"/>
           |    <input type="hidden" name="code" value="$code"/>
           |    <button type="submit">クライアントに権限を付与</button>
           |  </form>
@@ -61,6 +57,7 @@ class AuthController @Inject()(cc: ControllerComponents) extends AbstractControl
 
       Ok(html).as(HTML)
     }
+    result.fold(identity, identity)
   }
 
   def token: Action[AnyContent] = Action { (request: Request[AnyContent]) =>
@@ -72,45 +69,54 @@ class AuthController @Inject()(cc: ControllerComponents) extends AbstractControl
     val codeVerifier = form.get("code_verifier").flatMap(_.headOption).getOrElse("")
     val clientId = form.get("client_id").flatMap(_.headOption).getOrElse("client123")
 
-    // TODO: Validation
+    val maybeStoredCode = codeStore.get(code)
+    
+    // TODO: for式などにする
+    if (grantType != "authorization_code") {
+      Redirect("/error?message=invalidGrantType")
+    } else if (maybeStoredCode.isEmpty) {
+      Redirect("/error?message=invalidCode")
+    // TODO: code_verifierの検証
+    } else {
 
-    val secret = "my-secret-key-123456"
-    val algorithm = Algorithm.HMAC256(secret)
-    val now = System.currentTimeMillis()
-    val expiresInSec = 3600
-    val exp = new Date(now + expiresInSec * 1000)
-    val iat = new Date(now)
-    val nbf = new Date(now)
-    val iss = "http://localhost:9000"
-    val sub = "user-1234"
-    val name = "テストユーザー"
-    val email = "test@example.com"
+      val secret = "my-secret-key-123456"
+      val algorithm = Algorithm.HMAC256(secret)
+      val now = System.currentTimeMillis()
+      val expiresInSec = 3600
+      val exp = new Date(now + expiresInSec * 1000)
+      val iat = new Date(now)
+      val nbf = new Date(now)
+      val iss = "http://localhost:9000"
+      val sub = "user-1234"
+      val name = "テストユーザー"
+      val email = "test@example.com"
 
-    val accessToken = JWT.create()
-      .withIssuer(iss)
-      .withSubject(sub)
-      .withAudience(clientId)
-      .withExpiresAt(exp)
-      .withIssuedAt(iat)
-      .sign(algorithm)
+      val accessToken = JWT.create()
+        .withIssuer(iss)
+        .withSubject(sub)
+        .withAudience(clientId)
+        .withExpiresAt(exp)
+        .withIssuedAt(iat)
+        .sign(algorithm)
 
-    val idToken = JWT.create()
-      .withIssuer(iss)
-      .withSubject(sub)
-      .withAudience(clientId)
-      .withExpiresAt(exp)
-      .withIssuedAt(iat)
-      .withNotBefore(nbf)
-      .withClaim("name", name)
-      .withClaim("email", email)
-      .sign(algorithm)
+      val idToken = JWT.create()
+        .withIssuer(iss)
+        .withSubject(sub)
+        .withAudience(clientId)
+        .withExpiresAt(exp)
+        .withIssuedAt(iat)
+        .withNotBefore(nbf)
+        .withClaim("name", name)
+        .withClaim("email", email)
+        .sign(algorithm)
 
-    Ok(Json.obj(
-      "access_token" -> accessToken,
-      "token_type" -> "Bearer",
-      "expires_in" -> expiresInSec.toString,
-      "id_token" -> idToken
-    ))
+      Ok(Json.obj(
+        "access_token" -> accessToken,
+        "token_type" -> "Bearer",
+        "expires_in" -> expiresInSec.toString,
+        "id_token" -> idToken
+      ))
+    }
   }
 
   def error: Action[AnyContent] = Action { (request: Request[AnyContent]) =>
