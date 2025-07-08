@@ -86,28 +86,29 @@ class AuthController @Inject()(cc: ControllerComponents) extends AbstractControl
       val now = System.currentTimeMillis()
       val expiresInSec = 3600
       val exp = new Date(now + expiresInSec * 1000)
-      val iat = new Date(now)
-      val nbf = new Date(now)
-      val iss = "http://localhost:9000"
+      val issuedAt = new Date(now)
+      val notBefore = new Date(now)
+      val issuer = "http://localhost:9000"
+      // 実際はDBなどからユーザーを検索する
       val sub = "user-1234"
       val name = "テストユーザー"
       val email = "test@example.com"
 
       val accessToken = JWT.create()
-        .withIssuer(iss)
+        .withIssuer(issuer)
         .withSubject(sub)
         .withAudience(clientId)
         .withExpiresAt(exp)
-        .withIssuedAt(iat)
+        .withIssuedAt(issuedAt)
         .sign(algorithm)
 
       val idToken = JWT.create()
-        .withIssuer(iss)
+        .withIssuer(issuer)
         .withSubject(sub)
         .withAudience(clientId)
         .withExpiresAt(exp)
-        .withIssuedAt(iat)
-        .withNotBefore(nbf)
+        .withIssuedAt(issuedAt)
+        .withNotBefore(notBefore)
         .withClaim("name", name)
         .withClaim("email", email)
         .sign(algorithm)
@@ -145,18 +146,12 @@ class AuthController @Inject()(cc: ControllerComponents) extends AbstractControl
   }
 
   private def isCodeVerifierValid(codeVerifier: String, storedCodeChallenge: String, method: String): Boolean = {
-    println("isCodeVerifierValid")
-    println(s"codeVerifier: $codeVerifier")
-    println(s"storedCodeChallenge: $storedCodeChallenge")
-    println(s"method: $method")
     method match {
       case "S256" =>
         val digest = MessageDigest.getInstance("SHA-256").digest(
           codeVerifier.getBytes("UTF-8")
         )
-        println(s"digest: $digest")
         val computedChallenge = Base64.getUrlEncoder.withoutPadding().encodeToString(digest)
-        println(s"computedChallenge: $computedChallenge")
         computedChallenge == storedCodeChallenge
       case _ =>
         false
