@@ -40,7 +40,7 @@ class LoginController @Inject()(cc: ControllerComponents, ws: WSClient)(implicit
          |    <input type="hidden" name="response_type" value="$responseType"/>
          |    <input type="hidden" name="scope" value="openid"/>
          |    <input type="hidden" name="state" value="$state"/>
-         |    <input type="hidden" name="code_challenge" value=$codeChallenge/>
+         |    <input type="hidden" name="code_challenge" value="$codeChallenge"/>
          |    <input type="hidden" name="code_challenge_method" value="$codeChallengeMethod"/>
          |    <button type="submit">OIDCでログイン</button>
          |  </form>

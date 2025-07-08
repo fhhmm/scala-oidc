@@ -10,6 +10,7 @@ import java.util.Date
 import scala.collection.concurrent.TrieMap
 import java.security.SecureRandom
 import java.util.Base64
+import java.security.MessageDigest
 
 
 @Singleton
@@ -76,7 +77,8 @@ class AuthController @Inject()(cc: ControllerComponents) extends AbstractControl
       Redirect("/error?message=invalidGrantType")
     } else if (maybeStoredCode.isEmpty) {
       Redirect("/error?message=invalidCode")
-    // TODO: code_verifierの検証
+    } else if (!isCodeVerifierValid(codeVerifier, maybeStoredCode.get.codeChallenge, maybeStoredCode.get.codeChallengeMethod)) {
+      Redirect("/error?message=invalidCodeVerifier")
     } else {
 
       val secret = "my-secret-key-123456"
@@ -140,5 +142,24 @@ class AuthController @Inject()(cc: ControllerComponents) extends AbstractControl
     val bytes = new Array[Byte](lengthBytes)
     SecureRandom.getInstanceStrong().nextBytes(bytes)
     Base64.getUrlEncoder.withoutPadding().encodeToString(bytes)
+  }
+
+  private def isCodeVerifierValid(codeVerifier: String, storedCodeChallenge: String, method: String): Boolean = {
+    println("isCodeVerifierValid")
+    println(s"codeVerifier: $codeVerifier")
+    println(s"storedCodeChallenge: $storedCodeChallenge")
+    println(s"method: $method")
+    method match {
+      case "S256" =>
+        val digest = MessageDigest.getInstance("SHA-256").digest(
+          codeVerifier.getBytes("UTF-8")
+        )
+        println(s"digest: $digest")
+        val computedChallenge = Base64.getUrlEncoder.withoutPadding().encodeToString(digest)
+        println(s"computedChallenge: $computedChallenge")
+        computedChallenge == storedCodeChallenge
+      case _ =>
+        false
+    }
   }
 }
