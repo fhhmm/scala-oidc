@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets
 class LoginController @Inject()(cc: ControllerComponents, ws: WSClient)(implicit ec: ExecutionContext) extends AbstractController(cc) {
   // state -> (codeVerifier, codeChallenge)
   private val codeStore = TrieMap.empty[String, (String, String)]
+
   private val redirectUri = "http://localhost:9000/callback"
   private val clientId = "client123"
   private val responseType = "code"

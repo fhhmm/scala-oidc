@@ -18,7 +18,6 @@ class AuthController @Inject()(cc: ControllerComponents) extends AbstractControl
   private val codeStore = TrieMap.empty[String, CodeRecord]
 
   def authorize: Action[AnyContent] = Action { (req: Request[AnyContent]) =>
-    // TODO: リファクタ
     val result = for {
       request <- AuthorizeRequest.parse(req.queryString) match {
         case Left(message) => Left(Redirect(s"/error/$message"))
@@ -71,16 +70,16 @@ class AuthController @Inject()(cc: ControllerComponents) extends AbstractControl
     val clientId = form.get("client_id").flatMap(_.headOption).getOrElse("client123")
 
     val maybeStoredCode = codeStore.get(code)
-    
-    // TODO: for式などにする
-    if (grantType != "authorization_code") {
-      Redirect("/error?message=invalidGrantType")
-    } else if (maybeStoredCode.isEmpty) {
-      Redirect("/error?message=invalidCode")
-    } else if (!isCodeVerifierValid(codeVerifier, maybeStoredCode.get.codeChallenge, maybeStoredCode.get.codeChallengeMethod)) {
-      Redirect("/error?message=invalidCodeVerifier")
-    } else {
 
+    val result = for {
+      _ <- Either.cond(grantType == "authorization_code", (), Redirect("/error?message=invalidGrantType"))
+      _ <- Either.cond(maybeStoredCode.isDefined, (), Redirect("/error?message=invalidCode"))
+      _ <- Either.cond(
+        isCodeVerifierValid(codeVerifier, maybeStoredCode.get.codeChallenge, maybeStoredCode.get.codeChallengeMethod),
+        (),
+        Redirect("/error?message=invalidCodeVerifier")
+      )
+    } yield {
       val secret = "my-secret-key-123456"
       val algorithm = Algorithm.HMAC256(secret)
       val now = System.currentTimeMillis()
@@ -120,6 +119,7 @@ class AuthController @Inject()(cc: ControllerComponents) extends AbstractControl
         "id_token" -> idToken
       ))
     }
+    result.fold(identity, identity)
   }
 
   def error: Action[AnyContent] = Action { (request: Request[AnyContent]) =>
